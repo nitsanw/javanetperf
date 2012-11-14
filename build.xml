@@ -1,0 +1,88 @@
+<project name="javanettest" default="compile">
+
+<property name="src" value="src" />
+<property name="testsrc" value="test" />
+<property name="lib" location="lib" />
+<property name="build" value="build" />
+<property name="depcache" value="${build}/depcache" />
+<property name="source_version" value="1.6" />
+<!--<property name="javac_args" value="-Xlint:unchecked"/>-->
+
+<property name="build.src" location="${build}/java" />
+<property name="build.test" location="${build}/test" />
+<property name="build.javasrc" location="${build}/generated/java" />
+<property name="compile.debug" value="true"/>
+
+<path id="classpath.base">
+    <pathelement location="${build.src}" />
+</path>
+
+<path id="classpath.test">
+    <path refid="classpath.base"/>
+    <pathelement location="${build.test}"/>
+    <pathelement location="${lib}/junit-4.7.jar"/>
+</path>
+
+<!-- Common macro for compiling Java source -->
+<macrodef name="Compile">
+    <attribute name="srcdir"/>
+    <attribute name="destdir"/>
+    <element name="compileoptions" implicit="true" optional="true"/>
+    <sequential>
+        <mkdir dir="@{destdir}"/>
+        <!-- avoids needing ant clean when changing interfaces -->
+        <depend srcdir="@{srcdir}" destdir="@{destdir}" cache="${depcache}"/>
+        <javac srcdir="@{srcdir}" destdir="@{destdir}" includeAntRuntime="no"
+                debug="${compile.debug}" source="${source_version}">
+            <compilerarg value="-Xlint:unchecked" />
+            <!--<compilerarg value="-Xlint:deprecation" />-->
+            <compileoptions/>
+        </javac>
+    </sequential>
+</macrodef>
+
+<!-- Common macro for running junit tests in both the test and runtest targets -->
+<macrodef name="RunJunit">
+    <attribute name="haltonfailure" default="yes" />
+    <element name="testspecification" implicit="yes" />
+    <sequential>
+        <junit printsummary="on" haltonfailure="@{haltonfailure}" failureproperty="junit.failed" fork="true" forkmode="once">
+            <classpath refid="classpath.test" />
+            <formatter type="plain" usefile="false"/>
+            <assertions><enable/></assertions>
+            <testspecification/>
+        </junit>
+    </sequential>
+</macrodef>
+
+<target name="compile" description="Compiles code, output goes to the build dir.">
+    <Compile srcdir="${src}" destdir="${build.src}">
+        <classpath refid="classpath.base"/>
+    </Compile>
+</target>
+
+<target name="testcompile" depends="compile" description="Compile all unit and system tests">
+    <Compile srcdir="${testsrc}" destdir="${build.test}">
+        <classpath refid="classpath.test"/>
+    </Compile>
+</target>
+
+<target name="test" depends="testcompile" description="Run all unit tests">
+    <RunJunit>
+        <batchtest>
+            <fileset dir="${build.test}">
+                <include name="**/*Test.class"/>
+                <exclude name="**/*$*.class"/>
+            </fileset>
+        </batchtest>
+    </RunJunit>
+</target>
+
+<target name="clean" description="Destroys all generated files and dirs.">
+    <delete dir="${build}"/>
+</target>
+
+<target name="help" description="print this help">
+    <exec executable="ant"><arg value="-projecthelp"/></exec>
+</target>
+</project>
