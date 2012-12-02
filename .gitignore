@@ -7,3 +7,8 @@
 /stringencoding.csv
 /bytebuffer.pyc
 /build
+/.settings
+/bin
+/.classpath
+/.project
+/.pydevproject
