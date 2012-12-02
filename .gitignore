@@ -4,3 +4,6 @@
 *.jar
 *.war
 *.ear
+/stringencoding.csv
+/bytebuffer.pyc
+/build

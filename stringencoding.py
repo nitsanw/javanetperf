@@ -18,11 +18,11 @@ def runTest(conversion_type, reuse, destination):
 
 if __name__ == "__main__":
     output = []
-    for conversion_type in ("bytebuffer", "string", "chars", "custom"):
+    for conversion_type in ("bytebuffer", "string", "string2", "chars", "custom"):
         for reuse in ("once", "reuse"):
-            for destination in ("array", "buffer", "bytebuffer"):
+            for destination in ("array", "buffer"):
                 results = runTest(conversion_type, reuse, destination)
-                print conversion_type, reuse, destination, bytebuffer.average(results)
+                print conversion_type, reuse, destination, min(results)
 
                 for value in results:
                     output.append((conversion_type, reuse, destination, value))
