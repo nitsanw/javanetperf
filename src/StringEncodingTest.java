@@ -10,7 +10,12 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.CoderResult;
 import java.util.ArrayList;
 
+import psy.lob.saw.CustomUtf8Encoder;
+import psy.lob.saw.UnsafeString;
+
 public class StringEncodingTest {
+    private final static boolean DIRECT_BB = false;
+
     private interface UTF8Encoder {
 	/** Assumes destination is large enough to hold encoded source. */
 	int encode(String source);
@@ -20,6 +25,8 @@ public class StringEncodingTest {
 	ByteBuffer encodeToNewBuffer(String source);
 
 	UTF8Encoder newInstance();
+
+	byte[] getBytes(int bytes);
     }
 
     private static final Charset UTF8 = Charset.forName("UTF-8");
@@ -30,10 +37,16 @@ public class StringEncodingTest {
 	protected final CharsetEncoder encoder;
 
 	protected UTF8CharsetEncoder(byte[] destination) {
+	    this(destination, UTF8.newEncoder());
+	}
+
+	protected UTF8CharsetEncoder(byte[] destination, CharsetEncoder encoder) {
 	    this.destination = destination;
-	    wrapper = ByteBuffer.wrap(destination);
-	    // ~ wrapper = ByteBuffer.allocateDirect(destination.length);
-	    encoder = UTF8.newEncoder();
+	    if (DIRECT_BB)
+		wrapper = ByteBuffer.allocateDirect(destination.length);
+	    else
+		wrapper = ByteBuffer.wrap(destination);
+	    this.encoder = encoder;
 	}
 
 	public byte[] encodeToArray(String source) {
@@ -45,6 +58,12 @@ public class StringEncodingTest {
 
 	public ByteBuffer encodeToNewBuffer(String source) {
 	    return ByteBuffer.wrap(encodeToArray(source));
+	}
+	public byte[] getBytes(int bytes){
+	    byte[] dst = new byte[bytes];
+	    wrapper.flip();
+	    wrapper.get(dst);
+	    return dst;
 	}
     }
 
@@ -115,16 +134,123 @@ public class StringEncodingTest {
 	}
     }
 
+    private static final class CharBufferCopyEncoder2 extends
+	    UTF8CharsetEncoder {
+	private final CharBuffer tempWrapper = CharBuffer.allocate(1024);
+	private final char[] tempChars = tempWrapper.array();
+
+	public CharBufferCopyEncoder2(byte[] destination) {
+	    super(destination);
+	}
+
+	public int encode(String source) {
+	    wrapper.clear();
+	    encoder.reset();
+
+	    // ~ final CharBuffer tempWrapper = CharBuffer.allocate(1024);
+	    // ~ final char[] tempChars = tempWrapper.array();
+
+	    // Copy the chunk into our temporary buffer
+	    source.getChars(0, source.length(), tempChars, 0);
+	    tempWrapper.clear();
+	    tempWrapper.limit(source.length());
+
+	    CoderResult result = encoder.encode(tempWrapper, wrapper, true);
+	    assert result == CoderResult.UNDERFLOW;
+
+	    return wrapper.position();
+	}
+
+	public CharBufferCopyEncoder2 newInstance() {
+	    return new CharBufferCopyEncoder2(wrapper.array());
+	}
+    }
+
+    private static final class CharBufferUnsafeEncoder extends
+	    UTF8CharsetEncoder {
+	public CharBufferUnsafeEncoder(byte[] destination) {
+	    super(destination);
+	}
+
+	public int encode(String source) {
+	    wrapper.clear();
+	    encoder.reset();
+	    CoderResult result = encoder.encode(
+		    UnsafeString.getStringAsCharBuffer(source), wrapper, true);
+	    assert result == CoderResult.UNDERFLOW;
+	    return wrapper.position();
+	}
+
+	public CharBufferUnsafeEncoder newInstance() {
+	    return new CharBufferUnsafeEncoder(wrapper.array());
+	}
+    }
+
+    private static final class CharBufferUnsafeEncoder2 extends
+	    UTF8CharsetEncoder {
+	private final CharBuffer tempWrapper = CharBuffer.allocate(0);
+
+	public CharBufferUnsafeEncoder2(byte[] destination) {
+	    super(destination);
+	}
+
+	public int encode(String source) {
+	    UnsafeString.wrapStringWithCharBuffer(source, tempWrapper);
+	    wrapper.clear();
+	    encoder.reset();
+	    CoderResult result = encoder.encode(tempWrapper, wrapper, true);
+	    assert result == CoderResult.UNDERFLOW;
+	    return wrapper.position();
+	}
+
+	public CharBufferUnsafeEncoder2 newInstance() {
+	    return new CharBufferUnsafeEncoder2(wrapper.array());
+	}
+    }
+
+    private static final class CharBufferUnsafeEncoder3 extends
+	    UTF8CharsetEncoder {
+	private CustomUtf8Encoder customEncoder = new CustomUtf8Encoder();
+
+	public CharBufferUnsafeEncoder3(byte[] destination) {
+	    super(destination);
+	}
+
+	public int encode(String source) {
+	    wrapper.clear();
+	    CoderResult result = customEncoder.encodeString(source, wrapper);
+	    assert result == CoderResult.UNDERFLOW;
+	    return wrapper.position();
+	}
+
+	public CharBufferUnsafeEncoder3 newInstance() {
+	    return new CharBufferUnsafeEncoder3(wrapper.array());
+	}
+    }
+
     private static final class StringEncoder implements UTF8Encoder {
 	private final byte[] destination;
-
+	private final ByteBuffer wrapper;
 	public StringEncoder(byte[] destination) {
 	    this.destination = destination;
+	    if(DIRECT_BB){
+		wrapper = ByteBuffer.allocateDirect(destination.length);
+	    }
+	    else{
+		wrapper = ByteBuffer.wrap(destination);
+	    }
 	}
 
 	public int encode(String source) {
 	    byte[] array = encodeToArray(source);
-	    System.arraycopy(array, 0, destination, 0, array.length);
+	    if(DIRECT_BB){
+		wrapper.clear();
+		wrapper.put(array);
+	    }
+	    else{
+		System.arraycopy(array, 0, destination, 0, array.length);
+		wrapper.position(array.length);
+	    }
 	    return array.length;
 	}
 
@@ -143,33 +269,38 @@ public class StringEncodingTest {
 	public StringEncoder newInstance() {
 	    return new StringEncoder(destination);
 	}
-    }
-
-    private static final class StringEncoder2 implements UTF8Encoder {
-	private final byte[] destination;
-
-	public StringEncoder2(byte[] destination) {
-	    this.destination = destination;
-	}
-
-	public int encode(String source) {
-	    byte[] array = encodeToArray(source);
-	    System.arraycopy(array, 0, destination, 0, array.length);
-	    return array.length;
-	}
-
-	public byte[] encodeToArray(String source) {
-	    return source.getBytes(UTF8);
-	}
-
-	public ByteBuffer encodeToNewBuffer(String source) {
-	    return ByteBuffer.wrap(encodeToArray(source));
-	}
-
-	public StringEncoder2 newInstance() {
-	    return new StringEncoder2(destination);
+	public byte[] getBytes(int bytes){
+	    byte[] dst = new byte[bytes];
+	    System.arraycopy(destination, 0, dst, 0, bytes);
+	    return dst;
 	}
     }
+
+    // private static final class StringEncoder2 implements UTF8Encoder {
+    // private final byte[] destination;
+
+    // public StringEncoder2(byte[] destination) {
+    // this.destination = destination;
+    // }
+    //
+    // public int encode(String source) {
+    // byte[] array = encodeToArray(source);
+    // System.arraycopy(array, 0, destination, 0, array.length);
+    // return array.length;
+    // }
+    //
+    // public byte[] encodeToArray(String source) {
+    // return source.getBytes(UTF8);
+    // }
+    //
+    // public ByteBuffer encodeToNewBuffer(String source) {
+    // return ByteBuffer.wrap(encodeToArray(source));
+    // }
+    //
+    // public StringEncoder2 newInstance() {
+    // return new StringEncoder2(destination);
+    // }
+    // }
 
     private static final class CustomEncoder implements UTF8Encoder {
 	private final ByteBuffer destination;
@@ -197,11 +328,16 @@ public class StringEncodingTest {
 	public CustomEncoder newInstance() {
 	    return new CustomEncoder(destination.array());
 	}
+	public byte[] getBytes(int bytes){
+	    byte[] dst = new byte[bytes];
+	    destination.get(dst);
+	    return dst;
+	}
     }
 
     private static void error() {
 	System.err
-		.println("(bytebuffer|string|chars|custom) (once|reuse) (buffer|array|bytebuffer) (input strings)");
+		.println("(bytebuffer|string|chars|custom|unsafe|unsafe2) (once|reuse) (buffer|array|bytebuffer) (input strings)");
 	System.exit(1);
     }
 
@@ -222,12 +358,23 @@ public class StringEncodingTest {
 	    encoder = new DirectEncoder(destination);
 	} else if (args[0].equals("string")) {
 	    encoder = new StringEncoder(destination);
-	} else if (args[0].equals("string2")) {
-	    encoder = new StringEncoder2(destination);
-	} else if (args[0].equals("chars")) {
+	}
+	// else if (args[0].equals("string2")) {
+	// encoder = new StringEncoder2(destination);
+	// }
+	else if (args[0].equals("chars")) {
 	    encoder = new CharBufferCopyEncoder(destination);
-	} else if (args[0].equals("custom")) {
+	} else if (args[0].equals("chars2")) {
+	    encoder = new CharBufferCopyEncoder2(destination);
+	}
+	else if (args[0].equals("custom")) {
 	    encoder = new CustomEncoder(destination);
+	} else if (args[0].equals("unsafe")) {
+	    encoder = new CharBufferUnsafeEncoder(destination);
+	} else if (args[0].equals("unsafe2")) {
+	    encoder = new CharBufferUnsafeEncoder2(destination);
+	} else if (args[0].equals("unsafe3")) {
+	    encoder = new CharBufferUnsafeEncoder3(destination);
 	} else {
 	    error();
 	    return;
@@ -261,9 +408,10 @@ public class StringEncodingTest {
 	    strings.add(line);
 	}
 
-	// ~ final int ITERATIONS = 5000000;
-	// ~ final int ITERATIONS = 1000000;
-	// ~ final int ITERATIONS = 10000;
+	// our main interest here is the encoding of the full set of strings
+	// I split the loops into separate methos to let the JIT do it's work
+	// more easily. Not made much of a difference to results, but I prefer
+	// it this way anyways...
 	final int ITERATIONS = 1000;
 	for (int j = 0; j < 50; ++j) {
 	    long start = System.nanoTime();
@@ -303,7 +451,10 @@ public class StringEncodingTest {
 
 	if (outputMode == OutputMode.REUSE_BUFFER) {
 	    int bytes = temp.encode(value);
-	    assert new String(destination, 0, bytes, "UTF-8").equals(value);
+	    // This did not work for direct buffers in the original and also exposed
+	    // a slight bias towards the string implementation as it didn't bother
+	    // bringing the buffer to the right position. 
+	    assert compareToOriginal(encoder.getBytes(bytes), value, bytes);
 	} else if (outputMode == OutputMode.ARRAY) {
 	    byte[] out = temp.encodeToArray(value);
 	    assert new String(out, "UTF-8").equals(value);
@@ -313,5 +464,10 @@ public class StringEncodingTest {
 	    assert new String(out.array(), 0, out.remaining(), "UTF-8")
 		    .equals(value);
 	}
+    }
+
+    private static boolean compareToOriginal(byte[] destination, String value,
+	    int bytes) throws UnsupportedEncodingException {
+	return new String(destination, 0, bytes, "UTF-8").equals(value);
     }
 }

@@ -18,13 +18,14 @@ def runTest(conversion_type, reuse, destination):
 
 if __name__ == "__main__":
     output = []
-    for conversion_type in ("bytebuffer", "string", "string2", "chars", "custom"):
-        for reuse in ("once", "reuse"):
-            for destination in ("array", "buffer"):
-                results = runTest(conversion_type, reuse, destination)
-                print conversion_type, reuse, destination, min(results)
+    #"unsafe3", "unsafe2", "unsafe",
+    for conversion_type in ("unsafe3", "unsafe3", "unsafe3", "chars2","chars2","chars2", "string","string","string"):
+        reuse = "reuse"
+        destination = "buffer"
+        results = runTest(conversion_type, reuse, destination)
+        print conversion_type, reuse, destination, min(results)
 
-                for value in results:
-                    output.append((conversion_type, reuse, destination, value))
+        for value in results:
+            output.append((conversion_type, reuse, destination, value))
 
     bytebuffer.saveCSVResults("stringencoding.csv", output)
