@@ -265,7 +265,7 @@ public class StringEncodingTest {
 	// ~ final int ITERATIONS = 1000000;
 	// ~ final int ITERATIONS = 10000;
 	final int ITERATIONS = 1000;
-	for (int j = 0; j < 20; ++j) {
+	for (int j = 0; j < 50; ++j) {
 	    long start = System.nanoTime();
 	    testLoop(destination, encoder, reuseEncoder, outputMode, strings,
 		    ITERATIONS);
