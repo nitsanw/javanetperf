@@ -5,8 +5,8 @@ import subprocess
 
 
 MEMORY = "512M"
-BASE_JAVA = ("taskset", "-c", "0,2", "java", "-server", "-Xmx" + MEMORY, "-Xms" + MEMORY, "-server", "-cp", "build/java")
-#BASE_JAVA = ("java", "-server", "-Xmx" + MEMORY, "-Xms" + MEMORY, "-server", "-cp", "build/java")
+#BASE_JAVA = ("taskset", "-c", "0,2", "java", "-server", "-Xmx" + MEMORY, "-Xms" + MEMORY, "-server", "-cp", "build/java")
+BASE_JAVA = ("java", "-server", "-Xmx" + MEMORY, "-Xms" + MEMORY, "-server", "-cp", "build/java")
 
 TEST = "ByteBufferTest"
 
