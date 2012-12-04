@@ -72,7 +72,7 @@ public class CustomUtf8Encoder {
     private final CoderResult encode(char[] sa, int spCurr, int sl, long dAddress, int dp,
 	    int dl) {
 	lastSp = spCurr;
-	int dlASCII = dp + Math.min(sl - lastSp, dl - dp);
+	int dlASCII = Math.min(sl - lastSp, dl - dp);
 	// handle ascii encoded strings in an optimised loop
 	while (dp < dlASCII && sa[lastSp] < 128)
 	    // TODO: could arguably skip this utility and compute the target address
